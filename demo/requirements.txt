@@ -1,0 +1,7 @@
+-f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+jax[cuda11_cudnn805]
+jaxlib
+git+https://github.com/huggingface/diffusers@main
+opencv-python
+transformers
+flax
