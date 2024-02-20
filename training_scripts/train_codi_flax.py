@@ -78,14 +78,11 @@ class TrainState(train_state.TrainState):
 
 
 def scalings_for_boundary_conditions(
-    timestep, sigma_data=0.5, timestep_scaling=1
+    timestep, sigma_data=0.5, timestep_scaling=10.0
 ):
   scaled_timestep = timestep * timestep_scaling
-
   c_skip = sigma_data**2 / (scaled_timestep**2 + sigma_data**2)
-  c_out = (sigma_data * scaled_timestep) / (
-      scaled_timestep**2 + sigma_data**2
-  ) ** 0.5
+  c_out = scaled_timestep / (scaled_timestep**2 + sigma_data**2) ** 0.5
   return c_skip, c_out
 
 
@@ -561,6 +558,13 @@ def main():
       snr = (alpha / sigma) ** 2
       return snr
 
+    null_token = tokenizer(
+        [""],
+        max_length=tokenizer.model_max_length,
+        padding="max_length",
+        truncation=True,
+        return_tensors="pt",
+    ).input_ids
     def train_step(
         state, unet_params, text_encoder_params, vae_params, batch, train_rng
     ):
@@ -590,7 +594,7 @@ def main():
         latents = latents * vae.config.scaling_factor
 
         # Sample noise that we'll add to the latents
-        noise_rng, timestep_rng = jax.random.split(sample_rng)
+        noise_rng, cfg_rng, timestep_rng = jax.random.split(sample_rng, 3)
         noise = jax.random.normal(noise_rng, latents.shape)
         # Sample a random timestep for each image
         bsz = latents.shape[0]
@@ -598,14 +602,16 @@ def main():
             timestep_rng,
             (bsz,),
             0,
-            noise_scheduler.config.num_train_timesteps,
+            args.distill_learning_steps
         )
         skipped_schedule = (
             noise_scheduler.config.num_train_timesteps
             // args.distill_learning_steps
         )
-        next_timesteps = timesteps - skipped_schedule
+        next_timesteps = timesteps - 1
         next_timesteps = jnp.where(next_timesteps < 0, 0, next_timesteps)
+        timesteps *= skipped_schedule
+        next_timesteps *= skipped_schedule
 
         noisy_latents = noise_scheduler.add_noise(
             noise_scheduler_state, latents, noise, timesteps
@@ -625,10 +631,10 @@ def main():
         )
 
         c_skip, c_out = scalings_for_boundary_conditions(
-            timesteps, timestep_scaling=10
+            timesteps, timestep_scaling=args.distill_timestep_scaling
         )
         c_skip_next, c_out_next = scalings_for_boundary_conditions(
-            next_timesteps, timestep_scaling=10
+            next_timesteps, timestep_scaling=args.distill_timestep_scaling
         )
 
         c_skip = broadcast_to_shape_from_left(c_skip, noisy_latents.shape)
@@ -646,8 +652,21 @@ def main():
             params=text_encoder_params,
             train=False,
         )[0]
+        uncond_embeddings = text_encoder(
+            null_token,
+            params=text_encoder_params,
+            train=False,
+        )[0]
+        merged_embeddings = jnp.concatenate([encoder_hidden_states, uncond_embeddings])
 
-        controlnet_cond = minibatch["conditioning_pixel_values"]
+        
+
+        if args.distill_type == "unconditional":
+          controlnet_cond = None
+        elif args.distill_type == "conditional":
+          controlnet_cond = minibatch["conditioning_pixel_values"]
+        else:
+          raise NotImplementedError
 
         # ======> step1 algorithm.12 of conditional distillation
         down_block_res_samples, mid_block_res_sample = None, None
@@ -668,17 +687,43 @@ def main():
               train=False,
               return_dict=False,
           )
+        elif args.onestepode == "uncontrol":
+          pass
+        else:
+          raise NotImplementedError
 
-        model_pred = unet.apply(
-            {"params": unet_params},
-            noisy_latents,
-            timesteps,
-            encoder_hidden_states,
-            down_block_additional_residuals=down_block_res_samples,
-            mid_block_additional_residual=mid_block_res_sample,
-        ).sample
+        cfg_scale = jax.random.randint(
+          cfg_rng,
+          (),
+          args.distill_guidance_min,
+          args.distill_guidance_max
+        )
 
-        if args.onestepode_sample_eps == "epsilon":
+        if args.onestepode_cfg:
+          # we experimentally find that applying cfg in onestepode 
+          # leads to gradient explosion
+          model_pred = unet.apply(
+              {"params": unet_params},
+              jnp.concateneate([noisy_latents] * 2, axis=0),
+              jnp.concatenate([timesteps] * 2, axis=0),
+              merged_embeddings,
+              down_block_additional_residuals=down_block_res_samples,
+              mid_block_additional_residual=mid_block_res_sample,
+          ).sample
+          model_pred_cond, model_pred_uncond = jnp.split(model_pred, 2, axis=0)
+          model_pred = model_pred_uncond + cfg_scale * (model_pred_cond - model_pred_uncond)
+        else:
+          model_pred = unet.apply(
+              {"params": unet_params},
+              noisy_latents,
+              timesteps,
+              encoder_hidden_states,
+              down_block_additional_residuals=down_block_res_samples,
+              mid_block_additional_residual=mid_block_res_sample,
+          ).sample
+        
+
+        if args.onestepode_sample_eps == "real":
           sampler_eps = noise
         elif args.onestepode_sample_eps == "v_prediction":
           sampler_eps = alpha_t * model_pred + sigma_t * noisy_latents
@@ -692,6 +737,7 @@ def main():
         hat_noisy_latents_s = alpha_s * sampler_x + sigma_s * sampler_eps
 
         # ======> step2 algorithm.11 of conditional distillation
+        # this is the default next step sampling in teacher models
         down_block_res_samples, mid_block_res_sample = controlnet.apply(
             {"params": ema_params},
             hat_noisy_latents_s,
@@ -822,12 +868,21 @@ def main():
           )
           return cumul_loss, cumul_grad, new_train_rng
 
-        loss, grad, new_train_rng = jax.lax.fori_loop(
-            0,
-            args.gradient_accumulation_steps,
-            cumul_grad_step,
-            init_loss_grad_rng,
-        )
+        if args.debug:
+          nojit_fori_loop = jax.disable_jit()(jax.lax.fori_loop)
+          loss, grad, new_train_rng = nojit_fori_loop(
+              0,
+              args.gradient_accumulation_steps,
+              cumul_grad_step,
+              init_loss_grad_rng,
+          )
+        else:
+          loss, grad, new_train_rng = jax.lax.fori_loop(
+              0,
+              args.gradient_accumulation_steps,
+              cumul_grad_step,
+              init_loss_grad_rng,
+          )
         loss, grad = jax.tree_map(
             lambda x: x / args.gradient_accumulation_steps, (loss, grad)
         )
@@ -860,6 +915,7 @@ def main():
     # Create parallel version of the train step
     if args.debug:
       p_train_step = train_step
+      logger.info("enter debugging mode")
     else:
       p_train_step = jax.pmap(train_step, "batch", donate_argnums=(0,))
 

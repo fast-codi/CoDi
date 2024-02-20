@@ -320,6 +320,14 @@ def parse_args():
       ),
   )
   parser.add_argument(
+      "--distill_type",
+      type=str,
+      default="text",
+      help=(
+          "conditional or unconditional"
+      ),
+  )
+  parser.add_argument(
       "--max_train_samples",
       type=int,
       default=None,
@@ -328,6 +336,27 @@ def parse_args():
           " training examples to this value if set. Needed if `streaming` is"
           " set to True."
       ),
+  )
+  parser.add_argument(
+      "--distill_guidance_min",
+      type=float,
+      default=2.0,
+      help=(
+          "minimal cfg rate"
+      ),
+  )
+  parser.add_argument(
+      "--distill_guidance_max",
+      type=float,
+      default=14.0,
+      help=(
+          "maximal cfg rate"
+      ),
+  )
+  parser.add_argument(
+      "--onestepode_cfg",
+      action="store_true",
+      help="apply cfg in teacher onestep calculation or not",
   )
   parser.add_argument(
       "--proportion_empty_prompts",
@@ -403,6 +432,12 @@ def parse_args():
       type=int,
       default=50,
       help="Number of sampling steps learned by distillation model",
+  )
+  parser.add_argument(
+      "--distill_timestep_scaling",
+      type=int,
+      default=10,
+      help="Number of scales in distill timesteps",
   )
   parser.add_argument(
       "--onestepode",

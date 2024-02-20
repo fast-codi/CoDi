@@ -59,7 +59,8 @@ export MODEL_DIR="runwayml/stable-diffusion-v1-5"
 export OUTPUT_DIR="canny_model"
 export DATASET_NAME="jax-diffusers-event/canny_diffusiondb"
 export NCCL_P2P_DISABLE=1
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export CUDA_VISIBLE_DEVICES=-1
+export XLA_FLAGS="--xla_force_host_platform_device_count=4 --xla_dump_to=/tmp/foo"
 
 python3 training_scripts/train_codi_flax.py \
  --pretrained_model_name_or_path $MODEL_DIR \
@@ -70,7 +71,7 @@ python3 training_scripts/train_codi_flax.py \
  --resolution 512 \
  --learning_rate 1e-5 \
  --train_batch_size 1 \
- --gradient_accumulation_steps 64 \
+ --gradient_accumulation_steps 1 \
  --revision main \
  --from_pt \
  --mixed_precision bf16 \
@@ -87,7 +88,7 @@ python3 training_scripts/train_codi_flax.py \
  --caption_column prompt \
  --conditioning_image transformed_image \
  --report_to wandb \
---validation_image "figs/control_bird_canny.png" \
+ --validation_image "figs/control_bird_canny.png" \
  --validation_prompt "cyberpunk bird" \
 ```
 
@@ -168,6 +169,7 @@ python3 training_scripts/train_codi_flax.py \
  --checkpointing_steps=10000 \
  --dataloader_num_workers=16 \
  --distill_learning_steps 50 \
+ --distill_timestep_scaling 10 \
  --onestepode control \
  --onestepode_control_params target \
  --onestepode_sample_eps v_prediction \
