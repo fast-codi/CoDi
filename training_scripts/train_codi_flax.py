@@ -24,6 +24,7 @@ import os
 import random
 import time
 from typing import Any, Dict
+from copy import deepcopy
 
 from args import parse_args
 from datasets import load_dataset
@@ -495,7 +496,7 @@ def main():
         "down_blocks_3",
         "mid_block",
     ]:
-      controlnet_params[key] = unet_params[key]
+      controlnet_params[key] = deepcopy(unet_params[key])
 
     ema_controlnet_params = jax.tree_map(jnp.array, controlnet_params)
 
