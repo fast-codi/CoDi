@@ -564,7 +564,7 @@ def main():
         padding="max_length",
         truncation=True,
         return_tensors="pt",
-    ).input_ids
+    ).input_ids.numpy()
     def train_step(
         state, unet_params, text_encoder_params, vae_params, batch, train_rng
     ):
@@ -709,7 +709,9 @@ def main():
               merged_embeddings,
               down_block_additional_residuals=down_block_res_samples,
               mid_block_additional_residual=mid_block_res_sample,
-          ).sample
+              train=False,
+              return_dict=False
+          )[0]
           model_pred_cond, model_pred_uncond = jnp.split(model_pred, 2, axis=0)
           model_pred = model_pred_uncond + cfg_scale * (model_pred_cond - model_pred_uncond)
         else:
@@ -720,7 +722,9 @@ def main():
               encoder_hidden_states,
               down_block_additional_residuals=down_block_res_samples,
               mid_block_additional_residual=mid_block_res_sample,
-          ).sample
+              train=False,
+              return_dict=False
+          )[0]
         
       # equation.7 of conditional distillation
         if args.onestepode_sample_eps == "real":
@@ -728,10 +732,10 @@ def main():
             noisy_latents - sigma_t * model_pred
           ) / alpha_t
           sampler_eps = model_pred
-        elif args.onestepode_sample_eps == "v_prediction":
+        elif args.onestepode_sample_eps == "vprediction":
           sampler_eps = alpha_t * model_pred + sigma_t * noisy_latents
           sampler_x = alpha_t * noisy_latents - sigma_t * model_pred
-        elif args.onestepode_sample_eps == "x_prediction":
+        elif args.onestepode_sample_eps == "xprediction":
           sampler_x = model_pred
           ampler_eps = (noisy_latents - alpha_t * model_pred) / sigma_t
         else:
@@ -746,9 +750,9 @@ def main():
         if args.cfg_aware_distill:
           down_block_res_samples, mid_block_res_sample = controlnet.apply(
               {"params": ema_params},
-              jnp.concateneate([hat_noisy_latents_t_minus_1] * 2, axis=0),
+              jnp.concatenate([hat_noisy_latents_t_minus_1] * 2, axis=0),
               jnp.concatenate([next_timesteps] * 2, axis=0),
-              encoder_hidden_states,
+              merged_embeddings,
               controlnet_cond,
               train=False,
               return_dict=False,
@@ -756,14 +760,14 @@ def main():
 
           target_model_pred = unet.apply(
               {"params": unet_params},
-              jnp.concateneate([hat_noisy_latents_t_minus_1] * 2, axis=0),
+              jnp.concatenate([hat_noisy_latents_t_minus_1] * 2, axis=0),
               jnp.concatenate([next_timesteps] * 2, axis=0),
-              encoder_hidden_states,
+              merged_embeddings,
               down_block_additional_residuals=down_block_res_samples,
               mid_block_additional_residual=mid_block_res_sample,
               train=False,
               return_dict=False,
-          )
+          )[0]
           model_pred_uncond, model_pred_cond = jnp.split(
             target_model_pred, 2, axis=0
           )
@@ -789,7 +793,7 @@ def main():
             mid_block_additional_residual=mid_block_res_sample,
             train=False,
             return_dict=False,
-          )
+          )[0]
 
         # equation.7 of conditional distillation
         if args.onestepode_sample_eps == 'real':
@@ -824,22 +828,23 @@ def main():
         if args.cfg_aware_distill:
           down_block_res_samples, mid_block_res_sample = controlnet.apply(
               {"params": params},
-              jnp.concateneate([noisy_latents] * 2, axis=0),
+              jnp.concatenate([noisy_latents] * 2, axis=0),
               jnp.concatenate([timesteps] * 2, axis=0),
-              encoder_hidden_states,
+              merged_embeddings,
               controlnet_cond,
               train=True,
               return_dict=False,
           )
           online_model_pred = unet.apply(
               {"params": unet_params},
-              jnp.concateneate([noisy_latents] * 2, axis=0),
+              jnp.concatenate([noisy_latents] * 2, axis=0),
               jnp.concatenate([timesteps] * 2, axis=0),
-              encoder_hidden_states,
+              merged_embeddings,
               down_block_additional_residuals=down_block_res_samples,
               mid_block_additional_residual=mid_block_res_sample,
-              return_dict = False
-          )
+              train=False,
+              return_dict=False
+          )[0]
           model_pred_uncond, model_pred_cond = jnp.split(
             online_model_pred, 2, axis=0
           )
@@ -865,7 +870,7 @@ def main():
               mid_block_additional_residual=mid_block_res_sample,
               train=False,
               return_dict = False
-          )
+          )[0]
 
         # equation.7 of conditional distillation
         if args.onestepode_sample_eps == 'real':

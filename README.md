@@ -55,12 +55,13 @@ https://huggingface.co/spaces/jax-diffusers-event/leaderboard.
 ```bash
 export HF_HOME="/data/kmei1/huggingface/"
 export DISK_DIR="/data/kmei1/huggingface/cache"
-export MODEL_DIR="runwayml/stable-diffusion-v1-5"
+export MODEL_DIR="stabilityai/stable-diffusion-2-1"
 export OUTPUT_DIR="canny_model"
 export DATASET_NAME="jax-diffusers-event/canny_diffusiondb"
 export NCCL_P2P_DISABLE=1
-export CUDA_VISIBLE_DEVICES=-1
-export XLA_FLAGS="--xla_force_host_platform_device_count=4 --xla_dump_to=/tmp/foo"
+export CUDA_VISIBLE_DEVICES=1,2,3,4
+# export XLA_FLAGS="--xla_dump_to=/tmp/foo"
+# export XLA_FLAGS="--xla_force_host_platform_device_count=4 --xla_dump_to=/tmp/foo"
 
 python3 training_scripts/train_codi_flax.py \
  --pretrained_model_name_or_path $MODEL_DIR \
@@ -71,7 +72,7 @@ python3 training_scripts/train_codi_flax.py \
  --resolution 512 \
  --learning_rate 1e-5 \
  --train_batch_size 1 \
- --gradient_accumulation_steps 1 \
+ --gradient_accumulation_steps 64 \
  --revision main \
  --from_pt \
  --mixed_precision bf16 \
@@ -80,10 +81,12 @@ python3 training_scripts/train_codi_flax.py \
  --validation_steps 100 \
  --dataloader_num_workers 16 \
  --distill_learning_steps 50 \
- --onestepode control \
+ --onestepode uncontrol \
  --onestepode_control_params target \
- --onestepode_sample_eps v_prediction \
+ --onestepode_sample_eps vprediction \
  --distill_loss consistency_x \
+ --distill_type conditional \
+ --cfg_aware_distill \
  --image_column original_image \
  --caption_column prompt \
  --conditioning_image transformed_image \
