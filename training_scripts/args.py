@@ -359,6 +359,11 @@ def parse_args():
       help="apply cfg in teacher onestep calculation or not",
   )
   parser.add_argument(
+      "--cfg_aware_distill",
+      action="store_true",
+      help="apply cfg in teacher step calculation or not",
+  )
+  parser.add_argument(
       "--proportion_empty_prompts",
       type=float,
       default=0,
@@ -457,7 +462,7 @@ def parse_args():
       default="v_prediction",
       help=(
           "epsilon prediction mode in predicting z_t including v_prediction,"
-          " x_prediction, or epsilon"
+          " x_prediction, or real"
       ),
   )
   parser.add_argument(

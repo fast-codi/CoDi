@@ -722,83 +722,175 @@ def main():
               mid_block_additional_residual=mid_block_res_sample,
           ).sample
         
-
+      # equation.7 of conditional distillation
         if args.onestepode_sample_eps == "real":
-          sampler_eps = noise
+          sampler_x = (
+            noisy_latents - sigma_t * model_pred
+          ) / alpha_t
+          sampler_eps = model_pred
         elif args.onestepode_sample_eps == "v_prediction":
           sampler_eps = alpha_t * model_pred + sigma_t * noisy_latents
+          sampler_x = alpha_t * noisy_latents - sigma_t * model_pred
         elif args.onestepode_sample_eps == "x_prediction":
-          sampler_eps = (noisy_latents - alpha_t * model_pred) / sigma_t
+          sampler_x = model_pred
+          ampler_eps = (noisy_latents - alpha_t * model_pred) / sigma_t
         else:
           raise NotImplementedError
 
-        # equation.7 of conditional distillation
-        sampler_x = alpha_t * noisy_latents - sigma_t * model_pred
-        hat_noisy_latents_s = alpha_s * sampler_x + sigma_s * sampler_eps
+        hat_noisy_latents_t_minus_1 = (
+          alpha_s * sampler_x + sigma_s * sampler_eps
+        )
 
         # ======> step2 algorithm.11 of conditional distillation
         # this is the default next step sampling in teacher models
-        down_block_res_samples, mid_block_res_sample = controlnet.apply(
-            {"params": ema_params},
-            hat_noisy_latents_s,
-            next_timesteps,
-            encoder_hidden_states,
-            controlnet_cond,
-            train=False,
-            return_dict=False,
-        )
+        if args.cfg_aware_distill:
+          down_block_res_samples, mid_block_res_sample = controlnet.apply(
+              {"params": ema_params},
+              jnp.concateneate([hat_noisy_latents_t_minus_1] * 2, axis=0),
+              jnp.concatenate([next_timesteps] * 2, axis=0),
+              encoder_hidden_states,
+              controlnet_cond,
+              train=False,
+              return_dict=False,
+          )
 
-        model_pred = unet.apply(
+          target_model_pred = unet.apply(
+              {"params": unet_params},
+              jnp.concateneate([hat_noisy_latents_t_minus_1] * 2, axis=0),
+              jnp.concatenate([next_timesteps] * 2, axis=0),
+              encoder_hidden_states,
+              down_block_additional_residuals=down_block_res_samples,
+              mid_block_additional_residual=mid_block_res_sample,
+              train=False,
+              return_dict=False,
+          )
+          model_pred_uncond, model_pred_cond = jnp.split(
+            target_model_pred, 2, axis=0
+          )
+          target_model_pred = model_pred_uncond + cfg_scale * (
+              model_pred_cond - model_pred_uncond
+          )
+        else:
+          down_block_res_samples, mid_block_res_sample = controlnet.apply(
+              {"params": ema_params},
+              hat_noisy_latents_t_minus_1,
+              next_timesteps,
+              encoder_hidden_states,
+              controlnet_cond,
+              train=False,
+              return_dict=False,
+          )
+          target_model_pred = unet.apply(
             {"params": unet_params},
-            hat_noisy_latents_s,
+            hat_noisy_latents_t_minus_1,
             next_timesteps,
             encoder_hidden_states,
             down_block_additional_residuals=down_block_res_samples,
             mid_block_additional_residual=mid_block_res_sample,
-        ).sample
+            train=False,
+            return_dict=False,
+          )
 
         # equation.7 of conditional distillation
+        if args.onestepode_sample_eps == 'real':
+          target_model_pred_x = (
+              hat_noisy_latents_t_minus_1 - sigma_s * target_model_pred
+          ) / alpha_s
+          target_model_pred_epsilon = target_model_pred
+        elif args.onestepode_sample_eps == 'vprediction':
+          target_model_pred_epsilon = (
+              alpha_s * target_model_pred + sigma_s * hat_noisy_latents_t_minus_1
+          )
+          target_model_pred_x = (
+              alpha_s * hat_noisy_latents_t_minus_1 - sigma_s * target_model_pred
+          )
+        elif args.onestepode_sample_eps == 'xprediction':
+          target_model_pred_x = target_model_pred
+          target_model_pred_epsilon = (
+              hat_noisy_latents_t_minus_1 - alpha_s * target_model_pred
+          ) / sigma_s
+        else:
+          raise NotImplementedError
+
         target_model_pred_x = (
-            alpha_s * hat_noisy_latents_s - sigma_s * model_pred
-        )
-        target_model_pred_x = (
-            c_skip_next * hat_noisy_latents_s + c_out_next * target_model_pred_x
+            c_skip_next * hat_noisy_latents_t_minus_1 + c_out_next * target_model_pred_x
         )
         target_model_pred_epsilon = (
-            alpha_s * model_pred + sigma_s * hat_noisy_latents_s
-        )
-        target_model_pred_epsilon = (
-            c_skip_next * hat_noisy_latents_s
+            c_skip_next * hat_noisy_latents_t_minus_1
             + c_out_next * target_model_pred_epsilon
         )
 
         # equation.8 of conditional distillation
-        down_block_res_samples, mid_block_res_sample = controlnet.apply(
-            {"params": params},
-            noisy_latents,
-            timesteps,
-            encoder_hidden_states,
-            controlnet_cond,
-            train=True,
-            return_dict=False,
-        )
-        model_pred = unet.apply(
-            {"params": unet_params},
-            noisy_latents,
-            timesteps,
-            encoder_hidden_states,
-            down_block_additional_residuals=down_block_res_samples,
-            mid_block_additional_residual=mid_block_res_sample,
-        ).sample
+        if args.cfg_aware_distill:
+          down_block_res_samples, mid_block_res_sample = controlnet.apply(
+              {"params": params},
+              jnp.concateneate([noisy_latents] * 2, axis=0),
+              jnp.concatenate([timesteps] * 2, axis=0),
+              encoder_hidden_states,
+              controlnet_cond,
+              train=True,
+              return_dict=False,
+          )
+          online_model_pred = unet.apply(
+              {"params": unet_params},
+              jnp.concateneate([noisy_latents] * 2, axis=0),
+              jnp.concatenate([timesteps] * 2, axis=0),
+              encoder_hidden_states,
+              down_block_additional_residuals=down_block_res_samples,
+              mid_block_additional_residual=mid_block_res_sample,
+              return_dict = False
+          )
+          model_pred_uncond, model_pred_cond = jnp.split(
+            online_model_pred, 2, axis=0
+          )
+          online_model_pred = model_pred_uncond + cfg_scale * (
+              model_pred_cond - model_pred_uncond
+          )
+        else:
+          down_block_res_samples, mid_block_res_sample = controlnet.apply(
+              {"params": params},
+              noisy_latents,
+              timesteps,
+              encoder_hidden_states,
+              controlnet_cond,
+              train=True,
+              return_dict=False,
+          )
+          online_model_pred = unet.apply(
+              {"params": unet_params},
+              noisy_latents,
+              timesteps,
+              encoder_hidden_states,
+              down_block_additional_residuals=down_block_res_samples,
+              mid_block_additional_residual=mid_block_res_sample,
+              train=False,
+              return_dict = False
+          )
 
         # equation.7 of conditional distillation
-        online_model_pred_x = alpha_t * noisy_latents - sigma_t * model_pred
+        if args.onestepode_sample_eps == 'real':
+          online_model_pred_x = (
+              noisy_latents - sigma_t * online_model_pred
+          ) / alpha_t
+          online_model_pred_epsilon = online_model_pred
+        elif args.onestepode_sample_eps == 'vprediction':
+          online_model_pred_epsilon = (
+              alpha_t * online_model_pred + sigma_t * noisy_latents
+          )
+          online_model_pred_x = (
+              alpha_t * noisy_latents - sigma_t * online_model_pred
+          )
+        elif args.onestepode_sample_eps == 'xprediction':
+          online_model_pred_x = online_model_pred
+          online_model_pred_epsilon = (
+              noisy_latents - alpha_t * online_model_pred
+          ) / sigma_t
+        else:
+          raise NotImplementedError
+
         online_model_pred_x = (
             c_skip * jax.lax.stop_gradient(noisy_latents)
             + c_out * online_model_pred_x
-        )
-        online_model_pred_epsilon = (
-            alpha_t * model_pred + sigma_t * noisy_latents
         )
         online_model_pred_epsilon = (
             c_skip * jax.lax.stop_gradient(noisy_latents)
