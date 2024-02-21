@@ -1,3 +1,4 @@
+import gradio as gr
 import jax
 import numpy as np
 import jax.numpy as jnp
@@ -6,8 +7,6 @@ from diffusers import FlaxControlNetModel, FlaxUNet2DConditionModel, FlaxAutoenc
 from codi.controlnet_flax import FlaxControlNetModel
 from codi.pipeline_flax_controlnet import FlaxStableDiffusionControlNetPipeline
 from transformers import CLIPTokenizer, FlaxCLIPTextModel
-
-rng = jax.random.PRNGKey(0)
 
 MODEL_NAME = "CompVis/stable-diffusion-v1-4"
 
@@ -80,25 +79,60 @@ pipeline_params = {
     "controlnet": controlnet_params['ema_params']['image_a']['params'],
 }
 
-num_samples = jax.device_count()
-rng = jax.random.split(rng, jax.device_count())
+def infer(prompt, negative_prompt, steps, cfgr):
+    rng = jax.random.PRNGKey(0)
+    num_samples = jax.device_count()
+    rng = jax.random.split(rng, jax.device_count())
 
-prompts = "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
-negative_prompts = "monochrome, lowres, bad anatomy, worst quality, low quality"
+    prompts = "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
+    negative_prompts = ""
 
-prompt_ids = pipeline.prepare_text_inputs([prompts] * num_samples)
-negative_prompt_ids = pipeline.prepare_text_inputs([negative_prompts] * num_samples)
+    prompt_ids = pipeline.prepare_text_inputs([prompts] * num_samples)
+    negative_prompt_ids = pipeline.prepare_text_inputs([negative_prompts] * num_samples)
 
-output = pipeline(
-    prompt_ids=prompt_ids,
-    image=None,
-    params=pipeline_params,
-    prng_seed=rng,
-    num_inference_steps=4,
-    guidance_scale=6.5,
-    neg_prompt_ids=negative_prompt_ids,
-    jit=False,
-).images
+    output = pipeline(
+        prompt_ids=prompt_ids,
+        image=None,
+        params=pipeline_params,
+        prng_seed=rng,
+        num_inference_steps=4,
+        guidance_scale=6.5,
+        neg_prompt_ids=negative_prompt_ids,
+        jit=False,
+    ).images
 
-output_images = pipeline.numpy_to_pil(np.asarray(output.reshape((num_samples,) + output.shape[-3:])))
-output_images[0].save("experiments/generated_image.png")
+    output_images = pipeline.numpy_to_pil(np.asarray(output.reshape((num_samples,) + output.shape[-3:])))
+    return output_images
+
+with gr.Blocks(theme='gradio/soft') as demo:
+    gr.Markdown("## Conditional Distillation (CoDi) with Different Controls")
+    gr.Markdown("[\[Paper\]](https://arxiv.org/abs/2310.01407) [\[Project Page\]](https://fast-codi.github.io)")
+
+    with gr.Tab("CoDi on Text-to-Image"):
+        
+        with gr.Row():
+            with gr.Column():
+                prompt_input = gr.Textbox(label="Prompt")
+                negative_prompt = gr.Textbox(label="Negative Prompt", value="monochrome, lowres, bad anatomy, worst quality, low quality")
+            output = gr.Gallery(label="Output Images")
+
+        with gr.Row():
+            num_inference_steps = gr.Slider(2, 8, value=4, step=1, label="Steps")
+            guidance_scale = gr.Slider(2.0, 14.0, value=7.5, step=0.5, label='Guidance Scale')
+        submit_btn = gr.Button(value = "Submit")
+        inputs = [
+            prompt_input,
+            negative_prompt,
+            num_inference_steps,
+            guidance_scale
+        ]
+        submit_btn.click(fn=infer, inputs=inputs, outputs=[output])
+
+        with gr.Row():
+            gr.Examples(
+                examples=["oranges", "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"],
+                inputs=prompt_input,
+                fn=infer
+            )
+
+demo.launch()

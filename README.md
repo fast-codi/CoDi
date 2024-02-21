@@ -59,7 +59,7 @@ export MODEL_DIR="stabilityai/stable-diffusion-2-1"
 export OUTPUT_DIR="canny_model"
 export DATASET_NAME="jax-diffusers-event/canny_diffusiondb"
 export NCCL_P2P_DISABLE=1
-export CUDA_VISIBLE_DEVICES=5
+export CUDA_VISIBLE_DEVICES=1,2,3,4
 # export XLA_FLAGS="--xla_force_host_platform_device_count=4 --xla_dump_to=/tmp/foo"
 
 python3 training_scripts/train_codi_flax.py \

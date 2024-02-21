@@ -260,6 +260,7 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
         height: int = 512,
         width: int = 512,
         distill_timestep_scaling: int = 10,
+        distill_learning_steps: int = 50,
         onestepode_sample_eps: str = "nprediction"
     ):
         if image is not None:
@@ -301,7 +302,6 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
             if latents.shape != latents_shape:
                 raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {latents_shape}")
 
-        init_noise = latents
         def loop_body(step, args):
             latents, scheduler_state = args
             latents_input = jnp.concatenate([latents] * 2)
@@ -309,9 +309,10 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
             t = jnp.array(scheduler_state.timesteps, dtype=jnp.int32)[step]
             timestep = jnp.broadcast_to(t, latents.shape[0])
             next_timestep = timestep - self.scheduler.config.num_train_timesteps // scheduler_state.num_inference_steps
+            next_timestep = jnp.where(next_timestep >= 0, next_timestep, 0)
 
-            jax.debug.print("timestep {}", timestep)
-            jax.debug.print("next_timestep {}", next_timestep)
+            # jax.debug.print("timestep {}", timestep)
+            # jax.debug.print("next_timestep {}", next_timestep)
 
             c_skip, c_out = scalings_for_boundary_conditions(
                 timestep, timestep_scaling=distill_timestep_scaling,
@@ -328,6 +329,13 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
                 latents,  # unused code
                 next_timestep,
             )
+
+            # jax.debug.print("timestep {}", timestep)
+            # jax.debug.print("next_timestep {}", next_timestep)
+            # jax.debug.print("c_skip {}", c_skip)
+            # jax.debug.print("c_out {}", c_out)
+            # jax.debug.print("alpha_s {}", alpha_s.mean())
+            # jax.debug.print("sigma_s {}", sigma_s.mean())
 
             c_skip = broadcast_to_shape_from_left(c_skip, latents.shape)
             c_out = broadcast_to_shape_from_left(c_out, latents.shape)
@@ -377,15 +385,20 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
             target_model_pred_x = (
                 c_skip * latents + c_out * target_model_pred_x
             )
-            target_model_pred_x = (
-                c_skip * latents + c_out * target_model_pred_x
-            )
 
-            latents = alpha_s * target_model_pred_x + sigma_s * init_noise
+            latents = alpha_s * target_model_pred_x + sigma_s * jax.random.normal(prng_seed, shape=latents.shape, dtype=jnp.float32)
             return latents, scheduler_state
 
         scheduler_state = self.scheduler.set_timesteps(
             params["scheduler"], num_inference_steps=num_inference_steps, shape=latents_shape
+        )
+        scheduler_state = params["scheduler"]
+        skipped_schedule = self.scheduler.num_train_timesteps // distill_learning_steps
+        timesteps = (jnp.arange(0, distill_learning_steps) * skipped_schedule).round()[::-1]
+        step_ratio = (distill_learning_steps + num_inference_steps - 1) // num_inference_steps
+        timesteps = timesteps[::step_ratio]
+        scheduler_state = scheduler_state.replace(
+            num_inference_steps=num_inference_steps, timesteps=timesteps
         )
 
         # scale the initial noise by the standard deviation required by the scheduler
