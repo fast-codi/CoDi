@@ -738,7 +738,7 @@ def main():
           sampler_x = alpha_t * noisy_latents - sigma_t * model_pred
         elif args.onestepode_sample_eps == "xprediction":
           sampler_x = model_pred
-          ampler_eps = (noisy_latents - alpha_t * model_pred) / sigma_t
+          sampler_eps = (noisy_latents - alpha_t * model_pred) / sigma_t
         else:
           raise NotImplementedError
 
