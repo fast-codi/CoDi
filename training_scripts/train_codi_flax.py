@@ -560,12 +560,13 @@ def main():
       return snr
 
     null_token = tokenizer(
-        [""],
+        [""] * args.train_batch_size,
         max_length=tokenizer.model_max_length,
         padding="max_length",
         truncation=True,
         return_tensors="pt",
     ).input_ids.numpy()
+
     def train_step(
         state, unet_params, text_encoder_params, vae_params, batch, train_rng
     ):
@@ -660,7 +661,6 @@ def main():
         )[0]
         merged_embeddings = jnp.concatenate([encoder_hidden_states, uncond_embeddings])
 
-        
 
         if args.distill_type == "unconditional":
           controlnet_cond = None
