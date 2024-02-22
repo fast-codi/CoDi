@@ -72,7 +72,7 @@ pipeline = FlaxStableDiffusionControlNetPipeline(
     None,
     dtype=jnp.float32,
 )
-controlnet_params = checkpoints.restore_checkpoint("experiments/checkpoint_72001", target=None)
+controlnet_params = checkpoints.restore_checkpoint("experiments/checkpoint_100000.orbax", target=None)
 
 pipeline_params = {
     "vae": vae_params,
@@ -110,11 +110,17 @@ def infer(seed, prompt, negative_prompt, steps, cfgr):
     return output_images
 
 with gr.Blocks(theme='gradio/soft') as demo:
-    gr.Markdown("## Parameter-efficient text-to-image distillation")
-    gr.Markdown("[\[Paper\]](https://arxiv.org/abs/2310.01407) [\[Project Page\]](https://fast-codi.github.io)")
+    gr.Markdown("## CoDi: Conditional Diffusion Distillation for Higher-Fidelity and Faster Image Generation")
+    gr.Markdown("[\[Paper\]](https://arxiv.org/abs/2310.01407) [\[Project Page\]](https://fast-codi.github.io) [\[Code\]](https://github.com/fast-codi/CoDi)")
 
     with gr.Tab("CoDi on Text-to-Image"):
-        
+
+        with gr.Row():
+            with gr.Column():
+                gr.Radio(["CompVis/stable-diffusion-v1-4"], value="CompVis/stable-diffusion-v1-4", label="baseline model", info="Chose the undistilled baseline model")
+            with gr.Column():
+                gr.Radio(["CoDi/text-to-image-v0-1"], value="CoDi/text-to-image-v0-1", label="distilled codi", info="Chose the distilled conditional model")
+
         with gr.Row():
             with gr.Column():
                 prompt_input = gr.Textbox(label="Prompt")

@@ -72,7 +72,7 @@ pipeline = FlaxStableDiffusionControlNetPipeline(
     None,
     dtype=jnp.float32,
 )
-controlnet_params = checkpoints.restore_checkpoint("experiments/checkpoint_72001/", target=None)
+controlnet_params = checkpoints.restore_checkpoint("experiments/checkpoint_100000.orbax", target=None)
 
 pipeline_params = {
     "vae": vae_params,
@@ -101,7 +101,7 @@ output = pipeline(
     params=pipeline_params,
     prng_seed=rng,
     num_inference_steps=4,
-    guidance_scale=6.5,
+    guidance_scale=4.5,
     neg_prompt_ids=negative_prompt_ids,
     jit=True,
 ).images
