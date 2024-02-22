@@ -76,7 +76,7 @@ python3 training_scripts/train_codi_flax.py \
  --resolution 512 \
  --learning_rate 5e-6 \
  --train_batch_size 2 \
- --gradient_accumulation_steps 1 \
+ --gradient_accumulation_steps 32 \
  --revision main \
  --from_pt \
  --mixed_precision bf16 \
