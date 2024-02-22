@@ -754,7 +754,7 @@ def main():
               jnp.concatenate([hat_noisy_latents_t_minus_1] * 2, axis=0),
               jnp.concatenate([next_timesteps] * 2, axis=0),
               merged_embeddings,
-              controlnet_cond,
+              jnp.concatenate([controlnet_cond] * 2, axis=0),
               train=False,
               return_dict=False,
           )
@@ -832,7 +832,7 @@ def main():
               jnp.concatenate([noisy_latents] * 2, axis=0),
               jnp.concatenate([timesteps] * 2, axis=0),
               merged_embeddings,
-              controlnet_cond,
+              jnp.concatenate([controlnet_cond] * 2, axis=0),
               train=True,
               return_dict=False,
           )
