@@ -6,6 +6,8 @@ from diffusers import FlaxControlNetModel, FlaxUNet2DConditionModel, FlaxAutoenc
 from codi.controlnet_flax import FlaxControlNetModel
 from codi.pipeline_flax_controlnet import FlaxStableDiffusionControlNetPipeline
 from transformers import CLIPTokenizer, FlaxCLIPTextModel
+from flax.training.common_utils import shard
+from flax.jax_utils import replicate
 
 rng = jax.random.PRNGKey(0)
 
@@ -70,14 +72,14 @@ pipeline = FlaxStableDiffusionControlNetPipeline(
     None,
     dtype=jnp.float32,
 )
-controlnet_params = checkpoints.restore_checkpoint("experiments/checkpoint_130001", target=None)
+controlnet_params = checkpoints.restore_checkpoint("experiments/checkpoint_72001/", target=None)
 
 pipeline_params = {
     "vae": vae_params,
     "unet": unet_params,
     "text_encoder": text_encoder.params,
     "scheduler": scheduler_state,
-    "controlnet": controlnet_params['ema_params']['image_a']['params'],
+    "controlnet": controlnet_params,
 }
 
 num_samples = jax.device_count()
@@ -89,15 +91,19 @@ negative_prompts = "monochrome, lowres, bad anatomy, worst quality, low quality"
 prompt_ids = pipeline.prepare_text_inputs([prompts] * num_samples)
 negative_prompt_ids = pipeline.prepare_text_inputs([negative_prompts] * num_samples)
 
+pipeline_params = replicate(pipeline_params)
+prompt_ids = shard(prompt_ids)
+negative_prompt_ids = shard(negative_prompt_ids)
+
 output = pipeline(
     prompt_ids=prompt_ids,
     image=None,
     params=pipeline_params,
     prng_seed=rng,
-    num_inference_steps=4,
+    num_inference_steps=25,
     guidance_scale=6.5,
     neg_prompt_ids=negative_prompt_ids,
-    jit=False,
+    jit=True,
 ).images
 
 output_images = pipeline.numpy_to_pil(np.asarray(output.reshape((num_samples,) + output.shape[-3:])))

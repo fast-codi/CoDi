@@ -308,11 +308,8 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
 
             t = jnp.array(scheduler_state.timesteps, dtype=jnp.int32)[step]
             timestep = jnp.broadcast_to(t, latents.shape[0])
-            next_timestep = timestep - self.scheduler.config.num_train_timesteps // scheduler_state.num_inference_steps
-            next_timestep = jnp.where(next_timestep >= 0, next_timestep, 0)
-
-            # jax.debug.print("timestep {}", timestep)
-            # jax.debug.print("next_timestep {}", next_timestep)
+            next_t = jnp.where(step < num_inference_steps -1, jnp.array(scheduler_state.timesteps, dtype=jnp.int32)[step + 1], 0)
+            next_timestep = jnp.broadcast_to(next_t, latents.shape[0])
 
             c_skip, c_out = scalings_for_boundary_conditions(
                 timestep, timestep_scaling=distill_timestep_scaling,
@@ -386,12 +383,9 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
                 c_skip * latents + c_out * target_model_pred_x
             )
 
-            latents = alpha_s * target_model_pred_x + sigma_s * jax.random.normal(prng_seed, shape=latents.shape, dtype=jnp.float32)
+            latents = alpha_s * target_model_pred_x + sigma_s * target_model_pred_epsilon
             return latents, scheduler_state
 
-        scheduler_state = self.scheduler.set_timesteps(
-            params["scheduler"], num_inference_steps=num_inference_steps, shape=latents_shape
-        )
         scheduler_state = params["scheduler"]
         skipped_schedule = self.scheduler.num_train_timesteps // distill_learning_steps
         timesteps = (jnp.arange(0, distill_learning_steps) * skipped_schedule).round()[::-1]
@@ -563,7 +557,7 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
 @partial(
     jax.pmap,
     in_axes=(None, 0, 0, 0, 0, None, 0, 0, 0, 0, 0, 0),
-    static_broadcasted_argnums=(0, 5),
+    static_broadcasted_argnums=(0, 5, 10, 11),
 )
 def _p_generate(
     pipe,

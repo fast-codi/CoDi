@@ -7,6 +7,9 @@ from diffusers import FlaxControlNetModel, FlaxUNet2DConditionModel, FlaxAutoenc
 from codi.controlnet_flax import FlaxControlNetModel
 from codi.pipeline_flax_controlnet import FlaxStableDiffusionControlNetPipeline
 from transformers import CLIPTokenizer, FlaxCLIPTextModel
+from flax.training.common_utils import shard
+from flax.jax_utils import replicate
+
 
 MODEL_NAME = "CompVis/stable-diffusion-v1-4"
 
@@ -69,43 +72,45 @@ pipeline = FlaxStableDiffusionControlNetPipeline(
     None,
     dtype=jnp.float32,
 )
-controlnet_params = checkpoints.restore_checkpoint("experiments/checkpoint_130001", target=None)
+controlnet_params = checkpoints.restore_checkpoint("experiments/checkpoint_72001", target=None)
 
 pipeline_params = {
     "vae": vae_params,
     "unet": unet_params,
     "text_encoder": text_encoder.params,
     "scheduler": scheduler_state,
-    "controlnet": controlnet_params['ema_params']['image_a']['params'],
+    "controlnet": controlnet_params,
 }
+pipeline_params = replicate(pipeline_params)
 
-def infer(prompt, negative_prompt, steps, cfgr):
-    rng = jax.random.PRNGKey(0)
+def infer(seed, prompt, negative_prompt, steps, cfgr):
+    rng = jax.random.PRNGKey(int(seed))
+
     num_samples = jax.device_count()
-    rng = jax.random.split(rng, jax.device_count())
+    rng = jax.random.split(rng, num_samples)
 
-    prompts = "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
-    negative_prompts = ""
+    prompt_ids = pipeline.prepare_text_inputs([prompt] * num_samples)
+    negative_prompt_ids = pipeline.prepare_text_inputs([negative_prompt] * num_samples)
 
-    prompt_ids = pipeline.prepare_text_inputs([prompts] * num_samples)
-    negative_prompt_ids = pipeline.prepare_text_inputs([negative_prompts] * num_samples)
+    prompt_ids = shard(prompt_ids)
+    negative_prompt_ids = shard(negative_prompt_ids)
 
     output = pipeline(
         prompt_ids=prompt_ids,
         image=None,
         params=pipeline_params,
         prng_seed=rng,
-        num_inference_steps=4,
-        guidance_scale=6.5,
+        num_inference_steps=int(steps),
+        guidance_scale=float(cfgr),
         neg_prompt_ids=negative_prompt_ids,
-        jit=False,
+        jit=True,
     ).images
 
     output_images = pipeline.numpy_to_pil(np.asarray(output.reshape((num_samples,) + output.shape[-3:])))
     return output_images
 
 with gr.Blocks(theme='gradio/soft') as demo:
-    gr.Markdown("## Conditional Distillation (CoDi) with Different Controls")
+    gr.Markdown("## Parameter-efficient text-to-image distillation")
     gr.Markdown("[\[Paper\]](https://arxiv.org/abs/2310.01407) [\[Project Page\]](https://fast-codi.github.io)")
 
     with gr.Tab("CoDi on Text-to-Image"):
@@ -114,13 +119,15 @@ with gr.Blocks(theme='gradio/soft') as demo:
             with gr.Column():
                 prompt_input = gr.Textbox(label="Prompt")
                 negative_prompt = gr.Textbox(label="Negative Prompt", value="monochrome, lowres, bad anatomy, worst quality, low quality")
+                seed = gr.Number(label="Seed", value=0)
             output = gr.Gallery(label="Output Images")
 
         with gr.Row():
-            num_inference_steps = gr.Slider(2, 8, value=4, step=1, label="Steps")
+            num_inference_steps = gr.Slider(2, 50, value=4, step=1, label="Steps")
             guidance_scale = gr.Slider(2.0, 14.0, value=7.5, step=0.5, label='Guidance Scale')
         submit_btn = gr.Button(value = "Submit")
         inputs = [
+            seed,
             prompt_input,
             negative_prompt,
             num_inference_steps,
@@ -135,4 +142,4 @@ with gr.Blocks(theme='gradio/soft') as demo:
                 fn=infer
             )
 
-demo.launch()
+demo.launch(max_threads=1, share=True)

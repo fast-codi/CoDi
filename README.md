@@ -1,3 +1,9 @@
+---
+title: CoDi
+app_file: app.py
+sdk: gradio
+sdk_version: 3.47.0
+---
 # <img src="https://www.gstatic.com/android/keyboard/emojikitchen/20201001/u1f430/u1f430_u1f422.png" width=32px /> CoDi: Conditional Diffusion Distillation
 
 This repository contains the **unofficial** implementation of the following paper:
@@ -33,6 +39,8 @@ beat the original 50 steps sampling in the FID and LPIPS metrics.
 
 ## News
 
+-   Feb-22-2024 We relase the parameters-efficient CoDi for text-to-image generation. 🏁
+
 -   Dec-02-2023 We relase the training script of CoDi. 🏁
 
 ## Detail Contents
@@ -44,6 +52,9 @@ beat the original 50 steps sampling in the FID and LPIPS metrics.
 
 > Note: The following instructions are modified from
 > https://github.com/huggingface/community-events/blob/main/jax-controlnet-sprint/README.md
+
+## Testing CoDi on Text-to-image 
+CoDi can perform text-to-image generation if we don't pass any conditional images.
 
 ## Training CoDi on HuggingFace Data
 
