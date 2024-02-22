@@ -1,9 +1,3 @@
----
-title: CoDi
-app_file: app.py
-sdk: gradio
-sdk_version: 3.47.0
----
 # <img src="https://www.gstatic.com/android/keyboard/emojikitchen/20201001/u1f430/u1f430_u1f422.png" width=32px /> CoDi: Conditional Diffusion Distillation
 
 This repository contains the **unofficial** implementation of the following paper:
@@ -39,7 +33,7 @@ beat the original 50 steps sampling in the FID and LPIPS metrics.
 
 ## News
 
--   Feb-22-2024 We relase the parameters-efficient CoDi for text-to-image generation. 🏁
+-   Feb-22-2024 We relase the checkpoint and demo for parameter-efficient CoDi. 🏁
 
 -   Dec-02-2023 We relase the training script of CoDi. 🏁
 
@@ -66,11 +60,11 @@ https://huggingface.co/spaces/jax-diffusers-event/leaderboard.
 ```bash
 export HF_HOME="/data/kmei1/huggingface/"
 export DISK_DIR="/data/kmei1/huggingface/cache"
-export MODEL_DIR="stabilityai/stable-diffusion-2-1"
+export MODEL_DIR="CompVis/stable-diffusion-v1-4"
 export OUTPUT_DIR="canny_model"
 export DATASET_NAME="jax-diffusers-event/canny_diffusiondb"
 export NCCL_P2P_DISABLE=1
-export CUDA_VISIBLE_DEVICES=1,2,3,4
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 # export XLA_FLAGS="--xla_force_host_platform_device_count=4 --xla_dump_to=/tmp/foo"
 
 python3 training_scripts/train_codi_flax.py \
@@ -80,8 +74,8 @@ python3 training_scripts/train_codi_flax.py \
  --load_from_disk \
  --cache_dir $DISK_DIR \
  --resolution 512 \
- --learning_rate 1e-5 \
- --train_batch_size 1 \
+ --learning_rate 5e-6 \
+ --train_batch_size 2 \
  --gradient_accumulation_steps 1 \
  --revision main \
  --from_pt \
@@ -89,11 +83,11 @@ python3 training_scripts/train_codi_flax.py \
  --max_train_steps 100_000 \
  --checkpointing_steps 10_000 \
  --validation_steps 100 \
- --dataloader_num_workers 16 \
+ --dataloader_num_workers 8 \
  --distill_learning_steps 50 \
  --onestepode uncontrol \
  --onestepode_control_params target \
- --onestepode_sample_eps vprediction \
+ --onestepode_sample_eps nprediction \
  --distill_loss consistency_x \
  --distill_type conditional \
  --cfg_aware_distill \

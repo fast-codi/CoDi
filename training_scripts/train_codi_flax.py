@@ -728,7 +728,7 @@ def main():
           )[0]
         
       # equation.7 of conditional distillation
-        if args.onestepode_sample_eps == "real":
+        if args.onestepode_sample_eps == "nprediction":
           sampler_x = (
             noisy_latents - sigma_t * model_pred
           ) / alpha_t
@@ -797,7 +797,7 @@ def main():
           )[0]
 
         # equation.7 of conditional distillation
-        if args.onestepode_sample_eps == 'real':
+        if args.onestepode_sample_eps == 'nprediction':
           target_model_pred_x = (
               hat_noisy_latents_t_minus_1 - sigma_s * target_model_pred
           ) / alpha_s
@@ -874,7 +874,7 @@ def main():
           )[0]
 
         # equation.7 of conditional distillation
-        if args.onestepode_sample_eps == 'real':
+        if args.onestepode_sample_eps == 'nprediction':
           online_model_pred_x = (
               noisy_latents - sigma_t * online_model_pred
           ) / alpha_t
