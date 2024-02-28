@@ -2,16 +2,17 @@ import jax
 import numpy as np
 import jax.numpy as jnp
 from flax.training import checkpoints
-from diffusers import FlaxControlNetModel, FlaxUNet2DConditionModel, FlaxAutoencoderKL, FlaxDDIMScheduler
+from diffusers import FlaxUNet2DConditionModel, FlaxAutoencoderKL, FlaxDDIMScheduler
 from codi.controlnet_flax import FlaxControlNetModel
 from codi.pipeline_flax_controlnet import FlaxStableDiffusionControlNetPipeline
 from transformers import CLIPTokenizer, FlaxCLIPTextModel
 from flax.training.common_utils import shard
 from flax.jax_utils import replicate
+from PIL import Image
 
 rng = jax.random.PRNGKey(0)
 
-MODEL_NAME = "CompVis/stable-diffusion-v1-4"
+MODEL_NAME = "stabilityai/stable-diffusion-2-1"
 
 unet, unet_params = FlaxUNet2DConditionModel.from_pretrained(
     MODEL_NAME,
@@ -38,18 +39,11 @@ tokenizer = CLIPTokenizer.from_pretrained(
     dtype=jnp.float32,
 )
 
-controlnet = FlaxControlNetModel(
-    in_channels=unet.config.in_channels,
-    down_block_types=unet.config.down_block_types,
-    only_cross_attention=unet.config.only_cross_attention,
-    block_out_channels=unet.config.block_out_channels,
-    layers_per_block=unet.config.layers_per_block,
-    attention_head_dim=unet.config.attention_head_dim,
-    cross_attention_dim=unet.config.cross_attention_dim,
-    use_linear_projection=unet.config.use_linear_projection,
-    flip_sin_to_cos=unet.config.flip_sin_to_cos,
-    freq_shift=unet.config.freq_shift,
+controlnet, controlnet_params = FlaxControlNetModel.from_pretrained(
+    'experiments/99000',
+    dtype=jnp.float32,
 )
+
 scheduler = FlaxDDIMScheduler(
     num_train_timesteps=1000,
     beta_start=0.00085,
@@ -70,9 +64,9 @@ pipeline = FlaxStableDiffusionControlNetPipeline(
     scheduler,
     None,
     None,
+    onestepode_sample_eps='vprediction',
     dtype=jnp.float32,
 )
-controlnet_params = checkpoints.restore_checkpoint("experiments/checkpoint_100000.orbax", target=None)
 
 pipeline_params = {
     "vae": vae_params,
@@ -95,9 +89,15 @@ pipeline_params = replicate(pipeline_params)
 prompt_ids = shard(prompt_ids)
 negative_prompt_ids = shard(negative_prompt_ids)
 
+validation_image = Image.open("figs/control_bird_canny.png").convert("RGB")
+processed_image = pipeline.prepare_image_inputs(
+    num_samples * [validation_image]
+)
+processed_image = shard(processed_image)
+
 output = pipeline(
     prompt_ids=prompt_ids,
-    image=None,
+    image=processed_image,
     params=pipeline_params,
     prng_seed=rng,
     num_inference_steps=4,

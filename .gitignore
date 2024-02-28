@@ -1,6 +1,6 @@
 wandb/
 canny_model/
-# experiments/
+experiments/
 .DS_Store
 
 # Byte-compiled / optimized / DLL files

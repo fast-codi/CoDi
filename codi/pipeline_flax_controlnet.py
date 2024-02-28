@@ -160,9 +160,11 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
         ],
         safety_checker: FlaxStableDiffusionSafetyChecker,
         feature_extractor: CLIPFeatureExtractor,
+        onestepode_sample_eps = 'vprediction',
         dtype: jnp.dtype = jnp.float32,
     ):
         super().__init__()
+        self.onestepode_sample_eps = onestepode_sample_eps
         self.dtype = dtype
 
         if safety_checker is None:
@@ -261,7 +263,6 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
         width: int = 512,
         distill_timestep_scaling: int = 10,
         distill_learning_steps: int = 50,
-        onestepode_sample_eps: str = "vprediction"
     ):
         if image is not None:
             height, width = image.shape[-2:]
@@ -363,17 +364,17 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
             mode_pred_uncond, model_prediction_text = jnp.split(model_pred, 2, axis=0)
             model_pred = mode_pred_uncond + guidance_scale * (model_prediction_text - mode_pred_uncond)
 
-            if onestepode_sample_eps == 'nprediction':
+            if self.onestepode_sample_eps == 'nprediction':
                 target_model_pred_x = (latents - sigma_t * model_pred ) / alpha_t
                 target_model_pred_epsilon = model_pred
-            elif onestepode_sample_eps == 'vprediction':
+            elif self.onestepode_sample_eps == 'vprediction':
                 target_model_pred_epsilon = (
                     alpha_t * model_pred + sigma_t * latents
                 )
                 target_model_pred_x = (
                     alpha_t * latents - sigma_t * model_pred
                 )
-            elif onestepode_sample_eps == 'xprediction':
+            elif self.onestepode_sample_eps == 'xprediction':
                 target_model_pred_x = model_pred
                 target_model_pred_epsilon = (latents - alpha_t * model_pred) / sigma_t
             else:

@@ -70,6 +70,7 @@ pipeline = FlaxStableDiffusionControlNetPipeline(
     scheduler,
     None,
     None,
+    onestepode_sample_eps='nprediction',
     dtype=jnp.float32,
 )
 controlnet_params = checkpoints.restore_checkpoint("experiments/checkpoint_100000.orbax", target=None)
