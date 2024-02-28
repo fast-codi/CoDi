@@ -1,13 +1,15 @@
-# <img src="https://www.gstatic.com/android/keyboard/emojikitchen/20201001/u1f430/u1f430_u1f422.png" width=32px /> CoDi: Conditional Diffusion Distillation
-
-This repository contains the **unofficial** implementation of the following paper:
+# <img src="https://www.gstatic.com/android/keyboard/emojikitchen/20201001/u1f430/u1f430_u1f422.png" width=32px /> CoDi: Conditional Diffusion Distillation (CVPR24)
 
 > CoDi: Conditional Diffusion Distillation for Higher-Fidelity and Faster Image Generation <br>
 > Kangfu Mei <sup>1, 2</sup>, Mauricio Delbracio <sup>2</sup>, Hossein Talebi <sup>2</sup>, Zhengzhong Tu <sup>2</sup>, Vishal M. Patel <sup>1</sup>, Peyman Milanfar <sup>2</sup> <br>
 > <sup>1</sup>Johns Hopkins University <br>
 > <sup>2</sup>Google Research <br>
 
-[\[Paper\]](https://arxiv.org/abs/2310.01407)
+[\[Paper\]](https://arxiv.org/abs/2310.01407) [\[Project Page\]](https://fast-codi.github.io)
+
+
+*Disclaimer: This is not an official Google product. This repository contains the **unofficial** implementation. Please refer to the **official** implementaion at https://github.com/google-research/google-research/tree/master/CoDi.*
+
 
 ## Introduction
 
@@ -18,10 +20,6 @@ Inpainting, InstructPix2Pix, etc.).
 
 ![teaser](figs/teaser.jpg)
 
-Compared with previous (two-stage) distillation methods---either distillation-first or fine-tuning-first, our CoDi presents the first *single-stage* distillation strategy that directly distills a diffusion model from a text-to-image pretraining with new conditions, yiedling a fully distilled conditional diffusion model.
-
-<img src="figs/overview_of_codi.jpg" width="40%" style="display: block; margin-left: auto; margin-right: auto;" />
-
 On the standard real-world image super-resolution benchmark, we show that CoDi
 is capable of achieving 50 steps sampling performance in terms of FID and LPIPS
 with 4 steps only. It largely outperforms previous guided-distillation and
@@ -29,9 +27,13 @@ consistency model. On the less challenge tasks such text-guided inpainting, we
 show that a new parameter-efficient distillation first proposed by us can even
 beat the original 50 steps sampling in the FID and LPIPS metrics.
 
-<img src="figs/performance.png" width="80%" style="display: block; margin-left: auto; margin-right: auto;" />
+![performance](figs/performance.png)
+
 
 ## News
+-   Feb-27-2024 We relase the canny-image-to-image checkpoint and demo with parameter-efficient CoDi. 🏁
+
+-   Feb-26-2024 CoDi is accepted by CVPR24 🏁
 
 -   Feb-22-2024 We relase the checkpoint and demo for parameter-efficient CoDi. 🏁
 
@@ -41,14 +43,13 @@ beat the original 50 steps sampling in the FID and LPIPS metrics.
 
 1.  [Training CoDi on HuggingFace Data](#training-codi-on-huggingface-data)
 2.  [Training CoDi on Your Own Data](#training-codi-on-your-own-data)
+2.  [Testing CoDi on Canny Images](#testing-codi-on-canny-images)
 3.  [Citations](#citations)
 4.  [Acknowledgement](#acknowledgement)
 
 > Note: The following instructions are modified from
 > https://github.com/huggingface/community-events/blob/main/jax-controlnet-sprint/README.md
 
-## Testing CoDi on Text-to-image 
-CoDi can perform text-to-image generation if we don't pass any conditional images.
 
 ## Training CoDi on HuggingFace Data
 
@@ -60,37 +61,37 @@ https://huggingface.co/spaces/jax-diffusers-event/leaderboard.
 ```bash
 export HF_HOME="/data/kmei1/huggingface/"
 export DISK_DIR="/data/kmei1/huggingface/cache"
-export MODEL_DIR="CompVis/stable-diffusion-v1-4"
+export MODEL_DIR="stabilityai/stable-diffusion-2-1"
 export OUTPUT_DIR="canny_model"
 export DATASET_NAME="jax-diffusers-event/canny_diffusiondb"
 export NCCL_P2P_DISABLE=1
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=5
 # export XLA_FLAGS="--xla_force_host_platform_device_count=4 --xla_dump_to=/tmp/foo"
 
-python3 training_scripts/train_codi_flax.py \
+python3 train_codi_flax.py \
  --pretrained_model_name_or_path $MODEL_DIR \
  --output_dir $OUTPUT_DIR \
  --dataset_name $DATASET_NAME \
  --load_from_disk \
  --cache_dir $DISK_DIR \
  --resolution 512 \
- --learning_rate 5e-6 \
- --train_batch_size 2 \
- --gradient_accumulation_steps 32 \
+ --learning_rate 2e-5 \
+ --train_batch_size 4 \
+ --gradient_accumulation_steps 2 \
  --revision main \
  --from_pt \
  --mixed_precision bf16 \
  --max_train_steps 100_000 \
- --checkpointing_steps 10_000 \
+ --checkpointing_steps 1000 \
  --validation_steps 100 \
  --dataloader_num_workers 8 \
- --distill_learning_steps 50 \
+ --distill_learning_steps 20 \
+ --ema_decay 0.99995 \
  --onestepode uncontrol \
  --onestepode_control_params target \
- --onestepode_sample_eps nprediction \
+ --onestepode_sample_eps vprediction \
  --distill_loss consistency_x \
  --distill_type conditional \
- --cfg_aware_distill \
  --image_column original_image \
  --caption_column prompt \
  --conditioning_image transformed_image \
@@ -183,6 +184,26 @@ python3 training_scripts/train_codi_flax.py \
  --distill_loss consistency_x \
 ```
 
+## Testing CoDi on Canny Images
+
+<table>
+  <tr>
+    <td><img src='figs/control_bird_canny.png' width="180px" height="180px" /></td>
+    <td><img src='figs/controlnet_50steps.png' width="180px" height="180px" /></td>
+    <td><img src='figs/web-shadow0578_ours.png' width="160px"/></td> 
+  </tr>
+  <tr>
+  <td>Canny Image</td>
+  <td>Undistilled ControlNet w. 50-step sampling</td>
+  <td><b>Ours w. 4-step sampling</b></td>
+  </tr>
+  <tr>Prompt: cyberpunk bird</tr>
+</table>
+
+We provide the pretrained *canny-edge-to-image* model according to the Controlnet experiments https://huggingface.co/lllyasviel/sd-controlnet-canny.
+Note that we are using the open-sourced data, i.e., jax-diffusers-event/canny_diffusiondb, and thus there are difference in the styles between ControlNet's result and ours.
+
+
 ## Citations
 
 You may want to cite:
@@ -201,7 +222,3 @@ You may want to cite:
 The codes are based on [Diffusers](https://github.com/huggingface/diffusers) and
 [HuggingFace](https://github.com/huggingface/community-events/tree/main/jax-controlnet-sprint).
 Please also follow their licenses. Thanks for their awesome works.
-
----
-
-*Disclaimer: This is not an official Google product.*

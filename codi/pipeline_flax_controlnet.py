@@ -261,7 +261,7 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
         width: int = 512,
         distill_timestep_scaling: int = 10,
         distill_learning_steps: int = 50,
-        onestepode_sample_eps: str = "nprediction"
+        onestepode_sample_eps: str = "vprediction"
     ):
         if image is not None:
             height, width = image.shape[-2:]
@@ -366,14 +366,14 @@ class FlaxStableDiffusionControlNetPipeline(FlaxDiffusionPipeline):
             if onestepode_sample_eps == 'nprediction':
                 target_model_pred_x = (latents - sigma_t * model_pred ) / alpha_t
                 target_model_pred_epsilon = model_pred
-            elif args.onestepode_sample_eps == 'vprediction':
+            elif onestepode_sample_eps == 'vprediction':
                 target_model_pred_epsilon = (
-                    alpha_t * model_pred + sigma_t * latents_input
+                    alpha_t * model_pred + sigma_t * latents
                 )
                 target_model_pred_x = (
                     alpha_t * latents - sigma_t * model_pred
                 )
-            elif args.onestepode_sample_eps == 'xprediction':
+            elif onestepode_sample_eps == 'xprediction':
                 target_model_pred_x = model_pred
                 target_model_pred_epsilon = (latents - alpha_t * model_pred) / sigma_t
             else:

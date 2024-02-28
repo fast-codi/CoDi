@@ -30,9 +30,7 @@ from args import parse_args
 from datasets import load_dataset
 from datasets import load_from_disk
 from diffusers import FlaxAutoencoderKL
-from diffusers import FlaxControlNetModel
 from diffusers import FlaxDDPMScheduler
-from diffusers import FlaxStableDiffusionControlNetPipeline
 from diffusers import FlaxUNet2DConditionModel
 from diffusers.schedulers.scheduling_utils_flax import broadcast_to_shape_from_left
 from diffusers.schedulers.scheduling_utils_flax import get_sqrt_alpha_prod
@@ -57,6 +55,9 @@ import transformers
 from transformers import CLIPTokenizer
 from transformers import FlaxCLIPTextModel
 from transformers import set_seed
+
+from codi import FlaxStableDiffusionControlNetPipeline
+from codi import FlaxControlNetModel
 
 # To prevent an error that occurs when there are abnormally
 # large compressed data chunk in the png image
@@ -151,6 +152,7 @@ def log_validation(
         params=pipeline_params,
         prng_seed=prng_seed,
         num_inference_steps=4,
+        guidance_scale=1.0,
         jit=True,
     ).images
 
