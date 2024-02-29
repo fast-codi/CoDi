@@ -8,10 +8,9 @@
 [\[Paper\]](https://arxiv.org/abs/2310.01407) [\[Project Page\]](https://fast-codi.github.io)
 
 
-*Disclaimer: This is not an official Google product. This repository contains the **unofficial** implementation. Please refer to the **official** implementaion at https://github.com/google-research/google-research/tree/master/CoDi.*
+*Disclaimer: This is not an official Google product. This repository contains an unofficial implementation. Please refer to the official implementation at https://github.com/google-research/google-research/tree/master/CoDi.*
 
-*Disclaimer: We are making our best to use public avaiable data to match the performance that uses private data reported in the paper.*
-
+*Disclaimer: All models in this repository were trained using publicly available data.*
 
 ## Introduction
 
