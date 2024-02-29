@@ -164,7 +164,7 @@ export MODEL_DIR="runwayml/stable-diffusion-v1-5"
 export OUTPUT_DIR="/data/canny_model"
 export DATASET_DIR="/data/dataset"
 
-python3 training_scripts/train_codi_flax.py \
+python3 train_codi_flax.py \
  --pretrained_model_name_or_path=$MODEL_DIR \
  --output_dir=$OUTPUT_DIR \
  --train_data_dir=$DATASET_DIR \
