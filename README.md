@@ -216,8 +216,11 @@ wget https://www.cis.jhu.edu/~kmei1/publics/codi/canny_99000.tar.fz && tar -xzvf
 python test_canny.py
 
 # or gradio user interface
-
+python gradio_canny_to_image.py
 ```
+The user interface looks like this 👇
+![demo](figs/gradio_demo.jpg)
+
 
 ## Citations
 
