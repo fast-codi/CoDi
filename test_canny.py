@@ -1,7 +1,6 @@
 import jax
 import numpy as np
 import jax.numpy as jnp
-from flax.training import checkpoints
 from diffusers import FlaxUNet2DConditionModel, FlaxAutoencoderKL, FlaxDDIMScheduler
 from codi.controlnet_flax import FlaxControlNetModel
 from codi.pipeline_flax_controlnet import FlaxStableDiffusionControlNetPipeline
@@ -17,31 +16,34 @@ MODEL_NAME = "stabilityai/stable-diffusion-2-1"
 unet, unet_params = FlaxUNet2DConditionModel.from_pretrained(
     MODEL_NAME,
     subfolder="unet",
-    revision="flax",
-    dtype=jnp.float32,
+    revision="main",
+    from_pt=True,
+    dtype=jnp.bfloat16,
 )
 vae, vae_params = FlaxAutoencoderKL.from_pretrained(
     MODEL_NAME,
     subfolder="vae",
-    revision="flax",
-    dtype=jnp.float32,
+    revision="main",
+    from_pt=True,
+    dtype=jnp.bfloat16,
 )
 text_encoder = FlaxCLIPTextModel.from_pretrained(
     MODEL_NAME,
     subfolder="text_encoder",
-    revision="flax",
-    dtype=jnp.float32,
+    revision="main",
+    from_pt=True,
+    dtype=jnp.bfloat16,
 )
 tokenizer = CLIPTokenizer.from_pretrained(
     MODEL_NAME,
     subfolder="tokenizer",
-    revision="flax",
-    dtype=jnp.float32,
+    revision="main",
+    dtype=jnp.bfloat16,
 )
 
 controlnet, controlnet_params = FlaxControlNetModel.from_pretrained(
-    'experiments/99000',
-    dtype=jnp.float32,
+    'experiments/canny_99000',
+    dtype=jnp.bfloat16,
 )
 
 scheduler = FlaxDDIMScheduler(
@@ -65,7 +67,7 @@ pipeline = FlaxStableDiffusionControlNetPipeline(
     None,
     None,
     onestepode_sample_eps='vprediction',
-    dtype=jnp.float32,
+    dtype=jnp.bfloat16,
 )
 
 pipeline_params = {
@@ -79,8 +81,8 @@ pipeline_params = {
 num_samples = jax.device_count()
 rng = jax.random.split(rng, jax.device_count())
 
-prompts = "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
-negative_prompts = "monochrome, lowres, bad anatomy, worst quality, low quality"
+prompts = "birds"
+negative_prompts = ""
 
 prompt_ids = pipeline.prepare_text_inputs([prompts] * num_samples)
 negative_prompt_ids = pipeline.prepare_text_inputs([negative_prompts] * num_samples)
@@ -101,7 +103,7 @@ output = pipeline(
     params=pipeline_params,
     prng_seed=rng,
     num_inference_steps=4,
-    guidance_scale=4.5,
+    guidance_scale=8.5,
     neg_prompt_ids=negative_prompt_ids,
     jit=True,
 ).images

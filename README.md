@@ -10,6 +10,8 @@
 
 *Disclaimer: This is not an official Google product. This repository contains the **unofficial** implementation. Please refer to the **official** implementaion at https://github.com/google-research/google-research/tree/master/CoDi.*
 
+*Disclaimer: We are making our best to use public avaiable data to match the performance that uses private data reported in the paper.*
+
 
 ## Introduction
 
@@ -75,14 +77,14 @@ python3 train_codi_flax.py \
  --load_from_disk \
  --cache_dir $DISK_DIR \
  --resolution 512 \
- --learning_rate 2e-5 \
- --train_batch_size 4 \
+ --learning_rate 8e-6 \
+ --train_batch_size 2 \
  --gradient_accumulation_steps 2 \
  --revision main \
  --from_pt \
  --mixed_precision bf16 \
- --max_train_steps 100_000 \
- --checkpointing_steps 1000 \
+ --max_train_steps 200_000 \
+ --checkpointing_steps 10_000 \
  --validation_steps 100 \
  --dataloader_num_workers 8 \
  --distill_learning_steps 20 \
@@ -90,6 +92,7 @@ python3 train_codi_flax.py \
  --onestepode uncontrol \
  --onestepode_control_params target \
  --onestepode_sample_eps vprediction \
+ --cfg_aware_distill \
  --distill_loss consistency_x \
  --distill_type conditional \
  --image_column original_image \
@@ -97,7 +100,7 @@ python3 train_codi_flax.py \
  --conditioning_image transformed_image \
  --report_to wandb \
  --validation_image "figs/control_bird_canny.png" \
- --validation_prompt "cyberpunk bird" \
+ --validation_prompt "birds" \
 ```
 
 Note that you may need to change the `--image_column`, `--caption_column`, and
@@ -188,13 +191,11 @@ python3 training_scripts/train_codi_flax.py \
 
 <table>
   <tr>
-    <td><img src='figs/control_bird_canny.png' width="180px" height="180px" /></td>
-    <td><img src='figs/controlnet_50steps.png' width="180px" height="180px" /></td>
-    <td><img src='figs/web-shadow0578_ours.png' width="160px"/></td> 
+    <td><img src='figs/control_bird_canny.png' width="240px" /></td>
+    <td><img src='figs/codi_4step_canny.png' width="240px" /></td> 
   </tr>
   <tr>
   <td>Canny Image</td>
-  <td>Undistilled ControlNet w. 50-step sampling</td>
   <td><b>Ours w. 4-step sampling</b></td>
   </tr>
   <tr>Prompt: cyberpunk bird</tr>
@@ -202,7 +203,21 @@ python3 training_scripts/train_codi_flax.py \
 
 We provide the pretrained *canny-edge-to-image* model according to the Controlnet experiments https://huggingface.co/lllyasviel/sd-controlnet-canny.
 Note that we are using the open-sourced data, i.e., jax-diffusers-event/canny_diffusiondb, and thus there are difference in the styles between ControlNet's result and ours.
+```bash
+export HF_HOME="/data/kmei1/huggingface/"
+export DISK_DIR="/data/kmei1/huggingface/cache"
+export MODEL_DIR="stabilityai/stable-diffusion-2-1"
+export NCCL_P2P_DISABLE=1
+export CUDA_VISIBLE_DEVICES=5
 
+# download pretrained checkpoint and relocate it.
+wget https://www.cis.jhu.edu/~kmei1/publics/codi/canny_99000.tar.fz && tar -xzvf canny_99000.tar.fz -C experiments
+
+python test_canny.py
+
+# or gradio user interface
+
+```
 
 ## Citations
 
