@@ -197,7 +197,7 @@ python3 train_codi_flax.py \
   <td>Canny Image</td>
   <td><b>Ours w. 4-step sampling</b></td>
   </tr>
-  <tr>Prompt: cyberpunk bird</tr>
+  <tr>Prompt: birds</tr>
 </table>
 
 We provide the pretrained *canny-edge-to-image* model according to the Controlnet experiments https://huggingface.co/lllyasviel/sd-controlnet-canny.
